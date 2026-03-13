@@ -26,8 +26,8 @@ from src.recorder import save_recording, save_transcript
 async def run_bot(websocket, call_data, scenario):
     logger.info(f"Starting bot for scenario: {scenario.name} ({scenario.id})")
 
-    stream_sid = call_data.get("stream_sid")
-    call_sid = call_data.get("call_sid")
+    stream_sid = call_data.get("stream_id")
+    call_sid = call_data.get("call_id")
     call_start = time.time()
     turns = []
 
