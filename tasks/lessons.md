@@ -20,6 +20,14 @@
 **What happened:** Used `SileroVADAnalyzer.VADParams` as if it were a nested class — it's not.
 **Correct:** `from pipecat.audio.vad.vad_analyzer import VADParams`
 
-## 5. ffmpeg on Windows: nested folder from zip extraction (2026-03-12)
+## 5. parse_telephony_websocket returns stream_id/call_id, NOT stream_sid/call_sid (2026-03-13)
+**What happened:** Used `call_data.get("stream_sid")` — the actual keys are `"stream_id"` and `"call_id"`. Would have caused None values passed to TwilioFrameSerializer.
+**Rule:** Pipecat normalizes Twilio's `streamSid`/`callSid` to `stream_id`/`call_id`. Always use the normalized names.
+
+## 6. pyngrok has no disconnect_all() (2026-03-13)
+**What happened:** Called `ngrok.disconnect_all()` which doesn't exist. Only `ngrok.disconnect(url)` and `ngrok.kill()` exist.
+**Rule:** For cleanup, just use `ngrok.kill()` — it terminates the entire ngrok process.
+
+## 7. ffmpeg on Windows: nested folder from zip extraction (2026-03-12)
 **What happened:** Extracting ffmpeg zip created a double-nested folder. Had to flatten it.
 **Rule:** After extracting, check the actual structure before assuming paths are correct.
