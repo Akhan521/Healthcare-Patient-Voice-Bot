@@ -1,0 +1,16 @@
+[project]
+name = "pgai-patient-voice-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.1",
+    "loguru>=0.7.3",
+    "pipecat-ai[anthropic,deepgram,silero,websocket]>=0.0.105",
+    "pydub>=0.25.1",
+    "pyngrok>=7.5.1",
+    "python-dotenv>=1.2.2",
+    "twilio>=9.10.3",
+    "uvicorn>=0.41.0",
+]
