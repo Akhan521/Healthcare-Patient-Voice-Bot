@@ -103,7 +103,7 @@ This is a suggestion, not a mandate. Adapt as needed but keep it flat and simple
 
 - **Twilio MUST be a paid account** — trial accounts cannot call the test number and play an announcement
 - **Use `SileroVADAnalyzer`**, NOT Smart Turn — Smart Turn v3 breaks at 8kHz (Pipecat issue #3844)
-- **Use `AnthropicLLMService` directly** — do NOT use `OpenAILLMContext` or `AnthropicLLMContext` (deprecated)
+- **Use `AnthropicLLMService` with `settings=`** — `model=` param is deprecated in v0.0.105. Use `settings=AnthropicLLMService.Settings(model=..., system_instruction=...)`. Do NOT use `OpenAILLMContext` or `AnthropicLLMContext` (deprecated). Use universal `LLMContext` + `LLMContextAggregatorPair`
 - **Bot listens first** — the AI receptionist speaks first. Pipecat does NOT auto-generate at startup
 - **All audio is 8kHz** — Twilio requirement. Set `sample_rate=8000` everywhere
 - **On Windows:** set `asyncio.WindowsProactorEventLoopPolicy()` at startup

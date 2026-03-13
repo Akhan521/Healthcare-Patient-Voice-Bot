@@ -23,7 +23,7 @@ Three rounds of technical validation uncovered 7 issues — 1 plan-breaker, 3 hi
 
 | Component | Technology | Package |
 |-----------|-----------|---------|
-| Framework | Pipecat | `pipecat-ai[deepgram,anthropic,silero]` |
+| Framework | Pipecat (v0.0.105) | `pipecat-ai[deepgram,anthropic,silero,websocket]` |
 | Telephony | Twilio (**paid account required**) | `twilio` |
 | STT | Deepgram Nova 3 | (included in pipecat extras) |
 | TTS | Deepgram Aura 2 | (included in pipecat extras) |
@@ -37,7 +37,7 @@ Three rounds of technical validation uncovered 7 issues — 1 plan-breaker, 3 hi
 ### Install Command
 
 ```bash
-uv add "pipecat-ai[deepgram,anthropic,silero]" twilio fastapi uvicorn python-dotenv pydub pyngrok loguru
+uv add "pipecat-ai[deepgram,anthropic,silero,websocket]" twilio fastapi uvicorn python-dotenv pydub pyngrok loguru
 ```
 
 ---
@@ -64,14 +64,14 @@ uv add "pipecat-ai[deepgram,anthropic,silero]" twilio fastapi uvicorn python-dot
 4. **ffmpeg** — required for MP3 conversion
    - Do NOT use `winget install ffmpeg` — PATH configuration is broken on Windows
    - Manual install:
-     1. Download from https://www.gyan.dev/ffmpeg/builds/ (get "release full" build)
+     1. Download from https://www.gyan.dev/ffmpeg/builds/ (get "release essentials" build)
      2. Extract to `C:\ffmpeg\`
-     3. Add `C:\ffmpeg\bin` to system PATH
+     3. Add `C:\ffmpeg\ffmpeg-8.0.1-essentials_build\bin` to system PATH
      4. Restart terminal, verify: `ffmpeg -version`
    - As a safety net, also set the path explicitly in code:
      ```python
      from pydub import AudioSegment
-     AudioSegment.converter = r"C:\ffmpeg\bin\ffmpeg.exe"
+     AudioSegment.converter = r"C:\ffmpeg\ffmpeg-8.0.1-essentials_build\bin\ffmpeg.exe"
      ```
 
 5. **Anthropic API key** — already have
@@ -184,21 +184,53 @@ call = twilio_client.calls.create(
 
 ### `src/bot.py` — Pipecat Pipeline
 
-**Correct wiring pattern (validated against Pipecat source):**
+**Correct wiring pattern (validated against Pipecat v0.0.105 docs, March 2026):**
 
 ```python
+# Pipeline core
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask, PipelineParams
+
+# Transport — NOTE: pipecat.transports.network, NOT pipecat.transports.websocket
+from pipecat.transports.network.fastapi_websocket import FastAPIWebsocketTransport, FastAPIWebsocketParams
+
+# Twilio serializer (no pipecat extra — install twilio separately)
+from pipecat.serializers.twilio import TwilioFrameSerializer
+
+# Services
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.anthropic import AnthropicLLMService
-from pipecat.serializers.twilio import TwilioFrameSerializer
-from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
-from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
-from pipecat.vad.silero import SileroVADAnalyzer
 
-# Transport setup — serializer passed via params
+# VAD — NOTE: pipecat.audio.vad, NOT pipecat.vad
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+
+# Recording
+from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
+
+# Context — universal, NOT provider-specific
+from pipecat.processors.aggregators.llm_context import LLMContext, LLMContextAggregatorPair
+
+# Telephony helpers
+from pipecat.runner.utils import parse_telephony_websocket
+
+# --- LLM setup (model= param is DEPRECATED, use settings=) ---
+llm = AnthropicLLMService(
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+    settings=AnthropicLLMService.Settings(
+        model="claude-haiku-4-5-20250315",
+        system_instruction="You are a patient named ...",
+        max_tokens=200,
+        temperature=0.7,
+    ),
+)
+
+# --- Context management (universal LLMContext) ---
+context = LLMContext()
+user_aggregator, assistant_aggregator = LLMContextAggregatorPair(context)
+
+# --- Transport setup ---
 transport = FastAPIWebsocketTransport(
     websocket=ws_connection,
     params=FastAPIWebsocketParams(
@@ -207,41 +239,68 @@ transport = FastAPIWebsocketTransport(
             call_sid=call_sid,
             account_sid=TWILIO_ACCOUNT_SID,
             auth_token=TWILIO_AUTH_TOKEN,
-            params=TwilioFrameSerializer.InputParams(
-                sample_rate=8000,
-                auto_hang_up=True,
-            ),
         ),
-        add_wav_header=False,
+        audio_in_sample_rate=8000,
+        audio_out_sample_rate=8000,
     ),
 )
 
-# Pipeline order
+# --- AudioBufferProcessor (must call start_recording() explicitly) ---
+audiobuffer = AudioBufferProcessor(
+    num_channels=1,
+    sample_rate=8000,
+    user_continuous_stream=True,
+)
+
+# --- Pipeline order (audiobuffer AFTER transport.output()) ---
 pipeline = Pipeline([
     transport.input(),
     stt,
-    context_aggregator.user(),
+    user_aggregator,
     llm,
     tts,
     transport.output(),
-    context_aggregator.assistant(),
-    audio_buffer,
+    audiobuffer,
+    assistant_aggregator,
 ])
+
+task = PipelineTask(
+    pipeline,
+    params=PipelineParams(
+        audio_in_sample_rate=8000,
+        audio_out_sample_rate=8000,
+    ),
+)
+```
+
+**WebSocket endpoint pattern (using parse_telephony_websocket):**
+```python
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    transport_type, call_data = await parse_telephony_websocket(websocket)
+    # call_data has: stream_id, call_id, body (custom params from TwiML <Parameter>)
+    scenario_id = call_data["body"].get("scenario_id")
+    await run_bot(websocket, call_data, scenario_id)
 ```
 
 **Critical implementation details:**
 
-1. **Use `SileroVADAnalyzer`, NOT Smart Turn** — Pipecat issue #3844 confirms Smart Turn v3 breaks at 8kHz (Twilio's sample rate). Use basic Silero VAD instead.
+1. **Use `SileroVADAnalyzer`, NOT Smart Turn** — Pipecat issue #3844 confirms Smart Turn v3 breaks at 8kHz (Twilio's sample rate). Use basic Silero VAD instead. Note: default `stop_secs` changed from 0.8s to 0.2s in v0.0.105 — may need tuning upward for telephony to avoid premature cut-offs.
 
 2. **Bot listens first, does NOT speak first** — The AI receptionist greets first. Pipecat's `AnthropicLLMService` does NOT auto-generate at startup; it waits for user input. No special configuration needed.
 
-3. **Use `AnthropicLLMService` directly** — NOT `AnthropicLLMContext` (deprecated) or `OpenAILLMContext` (wrong provider). The modern Pipecat API uses the service's built-in context management.
+3. **Use `AnthropicLLMService` with `settings=`** — The `model=` constructor param is deprecated in v0.0.105. Use `settings=AnthropicLLMService.Settings(model=..., system_instruction=...)`. System prompt goes in `system_instruction`, NOT as a context message.
 
-4. **8kHz audio throughout** — Set `sample_rate=8000` in TwilioFrameSerializer, and `audio_in_sample_rate=8000` / `audio_out_sample_rate=8000` in PipelineParams.
+4. **Universal `LLMContext`** — Do NOT use `OpenAILLMContext` or `AnthropicLLMContext` (both deprecated). Use `LLMContext()` with `LLMContextAggregatorPair(context)` which returns `(user_aggregator, assistant_aggregator)`.
 
-5. **Max call duration** — Add a 180-second timer that triggers graceful hangup.
+5. **`AudioBufferProcessor` must be started explicitly** — Call `await audiobuffer.start_recording()` after pipeline setup. Place it AFTER `transport.output()` in the pipeline so it captures both sides.
 
-6. **Windows asyncio** — At the top of `run.py`:
+6. **8kHz audio throughout** — Set `audio_in_sample_rate=8000` / `audio_out_sample_rate=8000` in both `FastAPIWebsocketParams` and `PipelineParams`.
+
+7. **Max call duration** — Add a 180-second timer that triggers graceful hangup.
+
+8. **Windows asyncio** — At the top of `run.py`:
    ```python
    import sys, asyncio
    if sys.platform == "win32":
@@ -256,7 +315,9 @@ pipeline = Pipeline([
 
 **Recording:**
 - `AudioBufferProcessor` captures composite audio (both sides) as 16-bit PCM
-- On call end → convert to MP3 via `pydub`
+- **Must call `await audiobuffer.start_recording()` explicitly** — does NOT auto-start
+- Use `on_audio_data` event handler to receive audio when recording stops or buffer fills
+- Convert to MP3 via `pydub`
 - Use `pathlib.Path` for all file operations (Windows backslash safety)
 
 ```python
@@ -264,6 +325,20 @@ from pathlib import Path
 from pydub import AudioSegment
 
 RECORDINGS_DIR = Path("recordings")
+
+# Set up the audio buffer with event handler
+audiobuffer = AudioBufferProcessor(
+    num_channels=1,
+    sample_rate=8000,
+    user_continuous_stream=True,
+)
+
+@audiobuffer.event_handler("on_audio_data")
+async def on_audio_data(buffer, audio, sample_rate, num_channels):
+    save_recording(audio, scenario_id, timestamp)
+
+# Must be called after pipeline setup
+await audiobuffer.start_recording()
 
 def save_recording(raw_audio_bytes: bytes, scenario_id: str, timestamp: str) -> Path:
     audio = AudioSegment(
@@ -394,7 +469,7 @@ MAX_CALLS_PER_SESSION = 15           # Cost safety valve
 
 | Issue | Fix |
 |-------|-----|
-| ffmpeg not found after install | Manual install to `C:\ffmpeg\bin`, add to PATH, set `AudioSegment.converter` in code |
+| ffmpeg not found after install | Manual install to `C:\ffmpeg\ffmpeg-8.0.1-essentials_build\bin`, add to PATH, set `AudioSegment.converter` in code |
 | pydub MP3 export creates empty files | Always use `codec="libmp3lame"` and `bitrate="128k"` |
 | asyncio NotImplementedError | Set `WindowsProactorEventLoopPolicy()` at startup |
 | ngrok binary not found | Let `pyngrok` manage the binary — don't install ngrok separately |
