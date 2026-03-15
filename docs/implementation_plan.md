@@ -1,21 +1,25 @@
 # Implementation Plan — Healthcare Patient Voice Bot
 
-## CTO Review Summary (Revision 3)
+## CTO Review Summary (Revision 4 — Final)
 
-Three rounds of technical validation uncovered 7 issues — 1 plan-breaker, 3 high-risk, 3 medium-risk. All are addressed below.
+Four rounds of technical validation uncovered 14 issues total. All are resolved in the current code.
 
 | # | Issue | Severity | Status |
 |---|-------|----------|--------|
 | 1 | Twilio trial cannot call the test number | **PLAN-BREAKER** | Fixed: require paid account |
 | 2 | Twilio trial plays announcement before TwiML | **PLAN-BREAKER** | Fixed: same — paid account |
-| 3 | `OpenAILLMContext` wrong for Anthropic | **High** | Fixed: use `AnthropicLLMService` directly |
-| 4 | `aura-2-theron-en` voice ID doesn't exist | **High** | Fixed: verified voice IDs only |
-| 5 | ffmpeg PATH broken via `winget` on Windows | **High** | Fixed: manual install + explicit path in code |
-| 6 | pydub MP3 export silently fails on Windows | **Medium** | Fixed: explicit `codec="libmp3lame"` |
-| 7 | Pipecat issue #3844: Smart Turn breaks at 8kHz | **Medium** | Fixed: use basic SileroVAD, not Smart Turn |
-| 8 | `pipecat-ai[twilio]` extra doesn't exist | **Medium** | Fixed: install `twilio` separately |
-| 9 | Windows asyncio event loop | **Low** | Fixed: set ProactorEventLoop at startup |
-| 10 | File paths with backslashes on Windows | **Low** | Fixed: `pathlib.Path` everywhere |
+| 3 | `LLMContextAggregatorPair` doesn't exist in v0.0.105 | **CRITICAL** | Fixed: use `llm.create_context_aggregator(OpenAILLMContext(...))` |
+| 4 | `system_instruction` in Settings silently ignored | **CRITICAL** | Fixed: put system prompt in context messages (2+ messages required) |
+| 5 | `transcript_proc.assistant_tts()` doesn't exist | **CRITICAL** | Fixed: use `.assistant()` |
+| 6 | Wrong event handler names (`on_task_completed`, etc.) | **CRITICAL** | Fixed: use `on_pipeline_finished(task, frame)` |
+| 7 | VAD in `PipelineParams` instead of transport params | **High** | Fixed: moved to `FastAPIWebsocketParams` |
+| 8 | `call_data.get("stream_sid")` wrong keys | **High** | Fixed: use `stream_id`/`call_id` |
+| 9 | `ngrok.disconnect_all()` doesn't exist | **High** | Fixed: use `ngrok.kill()` |
+| 10 | `aura-2-theron-en` voice ID doesn't exist | **High** | Fixed: verified voice IDs only |
+| 11 | ffmpeg PATH broken via `winget` on Windows | **High** | Fixed: manual install + explicit path in code |
+| 12 | Deprecated import paths (transport, anthropic) | **Medium** | Fixed: use non-deprecated submodule paths |
+| 13 | pydub MP3 export silently fails on Windows | **Medium** | Fixed: explicit `codec="libmp3lame"` |
+| 14 | Pipecat issue #3844: Smart Turn breaks at 8kHz | **Medium** | Fixed: use basic SileroVAD, not Smart Turn |
 
 ---
 
@@ -184,7 +188,7 @@ call = twilio_client.calls.create(
 
 ### `src/bot.py` — Pipecat Pipeline
 
-**Correct wiring pattern (validated against Pipecat v0.0.105 docs, March 2026):**
+**Correct wiring pattern (validated against Pipecat v0.0.105 source, March 2026 — 3 CTO review rounds):**
 
 ```python
 # Pipeline core
@@ -192,85 +196,98 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask, PipelineParams
 
-# Transport — NOTE: pipecat.transports.network, NOT pipecat.transports.websocket
-from pipecat.transports.network.fastapi_websocket import FastAPIWebsocketTransport, FastAPIWebsocketParams
+# Transport (use websocket submodule, NOT network — the latter is deprecated)
+from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
 
 # Twilio serializer (no pipecat extra — install twilio separately)
 from pipecat.serializers.twilio import TwilioFrameSerializer
 
-# Services
+# Services (use submodule paths to avoid deprecation warnings)
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.anthropic import AnthropicLLMService
+from pipecat.services.anthropic.llm import AnthropicLLMService
 
-# VAD — NOTE: pipecat.audio.vad, NOT pipecat.vad
+# VAD (needs silero extra) — VADParams is a separate import!
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 
 # Recording
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
 
-# Context — universal, NOT provider-specific
-from pipecat.processors.aggregators.llm_context import LLMContext, LLMContextAggregatorPair
+# Context — OpenAILLMContext is universal for ALL providers (name is legacy)
+# WARNING: LLMContextAggregatorPair does NOT exist in v0.0.105!
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+
+# Transcript capture
+from pipecat.processors.transcript_processor import TranscriptProcessor
 
 # Telephony helpers
 from pipecat.runner.utils import parse_telephony_websocket
 
-# --- LLM setup (model= param is DEPRECATED, use settings=) ---
+# --- LLM setup ---
 llm = AnthropicLLMService(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
     settings=AnthropicLLMService.Settings(
         model="claude-haiku-4-5-20250315",
-        system_instruction="You are a patient named ...",
         max_tokens=200,
         temperature=0.7,
+        # NOTE: Do NOT set system_instruction here — it is silently ignored
+        # when using OpenAILLMContext. Put system prompt in context messages.
     ),
 )
 
-# --- Context management (universal LLMContext) ---
-context = LLMContext()
-user_aggregator, assistant_aggregator = LLMContextAggregatorPair(context)
+# --- Context management ---
+# MUST have 2+ messages — a single system message gets misinterpreted as user message!
+context = OpenAILLMContext(
+    messages=[
+        {"role": "system", "content": scenario.system_prompt},
+        {"role": "user", "content": "(waiting for the receptionist to greet me)"},
+    ]
+)
+# create_context_aggregator returns provider-specific aggregators
+context_agg = llm.create_context_aggregator(context)
 
-# --- Transport setup ---
+# --- VAD goes in transport params, NOT PipelineParams ---
+vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.6))
+
 transport = FastAPIWebsocketTransport(
-    websocket=ws_connection,
+    websocket=websocket,
     params=FastAPIWebsocketParams(
         serializer=TwilioFrameSerializer(
-            stream_sid=stream_sid,
-            call_sid=call_sid,
-            account_sid=TWILIO_ACCOUNT_SID,
-            auth_token=TWILIO_AUTH_TOKEN,
+            stream_sid=stream_sid,  # from call_data.get("stream_id")
+            call_sid=call_sid,      # from call_data.get("call_id")
+            account_sid=os.getenv("TWILIO_ACCOUNT_SID"),
+            auth_token=os.getenv("TWILIO_AUTH_TOKEN"),
         ),
         audio_in_sample_rate=8000,
         audio_out_sample_rate=8000,
+        vad_analyzer=vad,  # VAD is a transport-level concern
     ),
 )
 
-# --- AudioBufferProcessor (must call start_recording() explicitly) ---
-audiobuffer = AudioBufferProcessor(
-    num_channels=1,
-    sample_rate=8000,
-    user_continuous_stream=True,
-)
-
-# --- Pipeline order (audiobuffer AFTER transport.output()) ---
+# --- Pipeline order ---
 pipeline = Pipeline([
     transport.input(),
     stt,
-    user_aggregator,
+    transcript_proc.user(),       # captures receptionist speech
+    context_agg.user(),           # user aggregator
     llm,
     tts,
     transport.output(),
+    transcript_proc.assistant(),  # captures bot speech (NOT .assistant_tts()!)
+    context_agg.assistant(),      # assistant aggregator
     audiobuffer,
-    assistant_aggregator,
 ])
 
-task = PipelineTask(
-    pipeline,
-    params=PipelineParams(
-        audio_in_sample_rate=8000,
-        audio_out_sample_rate=8000,
-    ),
-)
+task = PipelineTask(pipeline, params=PipelineParams(
+    audio_in_sample_rate=8000,
+    audio_out_sample_rate=8000,
+))
+
+# Task completion event — NOT on_task_completed!
+@task.event_handler("on_pipeline_finished")
+async def on_pipeline_finished(task, frame):
+    await audiobuffer.stop_recording()
 ```
 
 **WebSocket endpoint pattern (using parse_telephony_websocket):**
@@ -284,28 +301,29 @@ async def websocket_endpoint(websocket: WebSocket):
     await run_bot(websocket, call_data, scenario_id)
 ```
 
-**Critical implementation details:**
+**Critical implementation details (verified against source, all bugs fixed):**
 
-1. **Use `SileroVADAnalyzer`, NOT Smart Turn** — Pipecat issue #3844 confirms Smart Turn v3 breaks at 8kHz (Twilio's sample rate). Use basic Silero VAD instead. Note: default `stop_secs` changed from 0.8s to 0.2s in v0.0.105 — may need tuning upward for telephony to avoid premature cut-offs.
+1. **Use `SileroVADAnalyzer`, NOT Smart Turn** — Pipecat issue #3844 confirms Smart Turn v3 breaks at 8kHz (Twilio's sample rate). VAD goes in `FastAPIWebsocketParams`, NOT `PipelineParams`.
 
-2. **Bot listens first, does NOT speak first** — The AI receptionist greets first. Pipecat's `AnthropicLLMService` does NOT auto-generate at startup; it waits for user input. No special configuration needed.
+2. **Bot listens first, does NOT speak first** — The AI receptionist greets first. Pipecat does NOT auto-generate at startup.
 
-3. **Use `AnthropicLLMService` with `settings=`** — The `model=` constructor param is deprecated in v0.0.105. Use `settings=AnthropicLLMService.Settings(model=..., system_instruction=...)`. System prompt goes in `system_instruction`, NOT as a context message.
+3. **`OpenAILLMContext` is the universal context class** — Despite the name, ALL providers use it in v0.0.105. `LLMContextAggregatorPair` does NOT exist yet. Use `llm.create_context_aggregator(context)` which returns provider-specific aggregators.
 
-4. **Universal `LLMContext`** — Do NOT use `OpenAILLMContext` or `AnthropicLLMContext` (both deprecated). Use `LLMContext()` with `LLMContextAggregatorPair(context)` which returns `(user_aggregator, assistant_aggregator)`.
+4. **System prompt goes in context messages, NOT in Settings** — `system_instruction` in `AnthropicLLMService.Settings` is silently ignored when using `OpenAILLMContext`. Context must have 2+ messages (a single system message gets misinterpreted as a user message).
 
-5. **`AudioBufferProcessor` must be started explicitly** — Call `await audiobuffer.start_recording()` after pipeline setup. Place it AFTER `transport.output()` in the pipeline so it captures both sides.
+5. **`AudioBufferProcessor` captures both sides via frame types** — It listens for `InputAudioRawFrame` (user) and `OutputAudioRawFrame` (bot) regardless of pipeline position. Must explicitly call `start_recording()` and `stop_recording()`.
 
-6. **8kHz audio throughout** — Set `audio_in_sample_rate=8000` / `audio_out_sample_rate=8000` in both `FastAPIWebsocketParams` and `PipelineParams`.
+6. **TranscriptProcessor methods: `.user()` and `.assistant()` only** — `.assistant_tts()` does NOT exist.
 
-7. **Max call duration** — Add a 180-second timer that triggers graceful hangup.
+7. **Task completion event: `on_pipeline_finished(task, frame)`** — NOT `on_task_completed`.
 
-8. **Windows asyncio** — At the top of `run.py`:
-   ```python
-   import sys, asyncio
-   if sys.platform == "win32":
-       asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-   ```
+8. **`parse_telephony_websocket` returns `stream_id`/`call_id`** — NOT `stream_sid`/`call_sid`. Pipecat normalizes Twilio's naming.
+
+9. **Use non-deprecated import paths** — `pipecat.services.anthropic.llm` (not `.anthropic`), `pipecat.transports.websocket.fastapi` (not `.network.fastapi_websocket`).
+
+10. **8kHz audio throughout** — Set in both `FastAPIWebsocketParams` and `PipelineParams`.
+
+11. **Windows asyncio** — Set `WindowsProactorEventLoopPolicy()` at startup in `run.py`.
 
 ---
 
@@ -314,52 +332,15 @@ async def websocket_endpoint(websocket: WebSocket):
 ### `src/recorder.py`
 
 **Recording:**
-- `AudioBufferProcessor` captures composite audio (both sides) as 16-bit PCM
-- **Must call `await audiobuffer.start_recording()` explicitly** — does NOT auto-start
-- Use `on_audio_data` event handler to receive audio when recording stops or buffer fills
-- Convert to MP3 via `pydub`
+- `AudioBufferProcessor` captures both sides via frame types (`InputAudioRawFrame` + `OutputAudioRawFrame`), mixes into mono
+- Must call `start_recording()` before and `stop_recording()` after — fires `on_audio_data` event with complete buffer
+- Convert to MP3 via `pydub` with explicit `codec="libmp3lame"` (Windows requirement)
 - Use `pathlib.Path` for all file operations (Windows backslash safety)
 
-```python
-from pathlib import Path
-from pydub import AudioSegment
-
-RECORDINGS_DIR = Path("recordings")
-
-# Set up the audio buffer with event handler
-audiobuffer = AudioBufferProcessor(
-    num_channels=1,
-    sample_rate=8000,
-    user_continuous_stream=True,
-)
-
-@audiobuffer.event_handler("on_audio_data")
-async def on_audio_data(buffer, audio, sample_rate, num_channels):
-    save_recording(audio, scenario_id, timestamp)
-
-# Must be called after pipeline setup
-await audiobuffer.start_recording()
-
-def save_recording(raw_audio_bytes: bytes, scenario_id: str, timestamp: str) -> Path:
-    audio = AudioSegment(
-        data=raw_audio_bytes,
-        sample_width=2,       # 16-bit
-        frame_rate=8000,      # Twilio's rate
-        channels=1,           # Mono composite
-    )
-    filepath = RECORDINGS_DIR / f"{scenario_id}_{timestamp}.mp3"
-    audio.export(
-        str(filepath),
-        format="mp3",
-        codec="libmp3lame",   # MUST specify on Windows — silent failure without it
-        bitrate="128k",
-    )
-    return filepath
-```
-
 **Transcription:**
-- Track conversation turns via context aggregator events
-- Format: `[MM:SS] PATIENT: ...` / `[MM:SS] AGENT: ...`
+- `TranscriptProcessor` captures both sides in the pipeline — `.user()` after STT, `.assistant()` after TTS
+- `on_transcript_update` event provides timestamped messages
+- Format: `[MM:SS] USER: ...` / `[MM:SS] ASSISTANT: ...`
 - Save to `transcripts/{scenario_id}_{timestamp}.txt`
 
 **Backup recording:**

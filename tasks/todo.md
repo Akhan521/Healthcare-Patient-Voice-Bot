@@ -6,14 +6,14 @@
 - [x] Phase 2: Scenario definitions (`src/scenarios.py` — 12 scenarios)
 - [x] Phase 3: Server + bot pipeline (all code written + CTO reviewed)
   - [x] `src/recorder.py` — MP3 + transcript saving
-  - [x] `src/bot.py` — Pipecat pipeline (CTO review: 4 bugs fixed)
+  - [x] `src/bot.py` — Pipecat pipeline (3 CTO review rounds: 10 bugs fixed total)
   - [x] `src/server.py` — FastAPI + ngrok + Twilio (CTO review: 2 bugs fixed)
   - [x] `run.py` — CLI entry point (Windows asyncio + uvicorn + scenario menu)
 
 ## In Progress
 - [ ] Phase 3 wrap-up
-  - [ ] Write `docs/code_walkthrough.md` — plain-language code explanation
-  - [ ] Commit + push Phase 3 (bot.py fix, server.py, run.py, task updates)
+  - [x] Write `docs/code_walkthrough.md` — plain-language code explanation
+  - [ ] Commit + push Phase 3 (walkthrough, task updates)
 
 ## Remaining
 - [ ] Phase 4: First test call — verify end-to-end
