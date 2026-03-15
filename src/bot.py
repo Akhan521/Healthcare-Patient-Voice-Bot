@@ -6,18 +6,18 @@ from loguru import logger
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask, PipelineParams
-from pipecat.transports.network.fastapi_websocket import (
+from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
     FastAPIWebsocketParams,
 )
 from pipecat.serializers.twilio import TwilioFrameSerializer
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.anthropic import AnthropicLLMService
+from pipecat.services.anthropic.llm import AnthropicLLMService
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
-from pipecat.processors.aggregators.llm_context import LLMContext, LLMContextAggregatorPair
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.transcript_processor import TranscriptProcessor
 
 from src.recorder import save_recording, save_transcript
@@ -62,15 +62,19 @@ async def run_bot(websocket, call_data, scenario):
         api_key=os.getenv("ANTHROPIC_API_KEY"),
         settings=AnthropicLLMService.Settings(
             model="claude-haiku-4-5-20250315",
-            system_instruction=scenario.system_prompt,
             max_tokens=200,
             temperature=0.7,
         ),
     )
 
-    # --- Context ---
-    context = LLMContext()
-    user_agg, assistant_agg = LLMContextAggregatorPair(context)
+    # --- Context (system prompt must be in context, not Settings) ---
+    context = OpenAILLMContext(
+        messages=[
+            {"role": "system", "content": scenario.system_prompt},
+            {"role": "user", "content": "(waiting for the receptionist to greet me)"},
+        ]
+    )
+    context_agg = llm.create_context_aggregator(context)
 
     # --- Transcript tracking (captures both sides) ---
     transcript_proc = TranscriptProcessor()
@@ -100,13 +104,13 @@ async def run_bot(websocket, call_data, scenario):
             transport.input(),
             stt,
             transcript_proc.user(),
-            user_agg,
+            context_agg.user(),
             llm,
             tts,
             transport.output(),
-            transcript_proc.assistant_tts(),
+            transcript_proc.assistant(),
+            context_agg.assistant(),
             audiobuffer,
-            assistant_agg,
         ]
     )
 
