@@ -228,7 +228,7 @@ from pipecat.runner.utils import parse_telephony_websocket
 llm = AnthropicLLMService(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
     settings=AnthropicLLMService.Settings(
-        model="claude-haiku-4-5-20250315",
+        model="claude-haiku-4-5-20251001",
         max_tokens=200,
         temperature=0.7,
         # NOTE: Do NOT set system_instruction here — it is silently ignored
