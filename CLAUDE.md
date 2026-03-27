@@ -99,6 +99,10 @@ This is a suggestion, not a mandate. Adapt as needed but keep it flat and simple
 | Audio | **pydub + ffmpeg** | ffmpeg must be manually installed on Windows |
 | Logging | **loguru** | Clean structured logging |
 
+### API Verification Rule
+
+When writing or reviewing code that uses third-party APIs (Twilio, Deepgram, Pipecat, Anthropic SDK, etc.), always use the `get-api-docs` skill to fetch current documentation before implementing. Do NOT rely on training data alone — API signatures change between versions.
+
 ### Critical Technical Notes
 
 - **Twilio MUST be a paid account** — trial accounts cannot call the test number and play an announcement

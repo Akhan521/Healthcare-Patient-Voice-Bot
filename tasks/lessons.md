@@ -54,6 +54,23 @@ context_agg = llm.create_context_aggregator(context)
 - `pipecat.transports.network.fastapi_websocket` → `pipecat.transports.websocket.fastapi`
 **Rule:** Use the non-deprecated paths to avoid runtime warnings.
 
+## 12. Always verify API details with live docs, not training data (2026-03-26)
+**What happened:** Code used model ID `claude-haiku-4-5-20250315` — a date suffix that doesn't exist. The valid IDs are `claude-haiku-4-5` (alias) or `claude-haiku-4-5-20251001` (pinned). This was written from memory during initial implementation and never caught across 3 CTO review rounds because the reviews checked Pipecat patterns, not upstream provider constants.
+**How it was caught:** Full API verification pass using Context7 MCP server and the `get-api-docs` skill to pull live documentation for every third-party dependency (Pipecat, Twilio, Deepgram, Anthropic, pyngrok).
+**Rule:** Before finalizing any code that uses third-party APIs, verify model IDs, parameter names, and function signatures against live documentation — not training data or memory. Use the `get-api-docs` skill or Context7 MCP to fetch current docs. This is especially important for:
+- Model IDs and version strings (they change with releases)
+- SDK parameter names (they get renamed between versions)
+- Event handler names (framework-specific, not guessable)
+- Voice/model catalog names (providers add/remove these regularly)
+
+## 13. TranscriptProcessor is deprecated in Pipecat v0.0.105 (2026-03-26)
+**What happened:** API verification revealed `TranscriptProcessor` prints a `DeprecationWarning` at runtime. It works but will be removed in a future version. The recommended replacement is to use `on_user_turn_stopped` / `on_assistant_turn_stopped` events on the context aggregators.
+**Rule:** Not a blocker for this project (v0.0.105 supports it), but if upgrading Pipecat in the future, this will need to change. Note in any upgrade planning.
+
+## 14. CTO reviews don't catch upstream constant errors (2026-03-26)
+**What happened:** Three rounds of CTO code review caught 14 bugs in Pipecat API usage (event names, import paths, parameter placement), but none caught the invalid Anthropic model ID. Code reviews focus on structural patterns and logic flow — they're blind to whether a string constant like a model ID is actually valid upstream.
+**Rule:** Code review and API doc verification are complementary, not redundant. After CTO review passes, run a separate verification pass that checks every third-party constant (model IDs, voice names, API endpoints, SDK version compatibility) against live documentation.
+
 ## 11. ffmpeg on Windows: nested folder from zip extraction (2026-03-12)
 **What happened:** Extracting ffmpeg zip created a double-nested folder. Had to flatten it.
 **Rule:** After extracting, check the actual structure before assuming paths are correct.
