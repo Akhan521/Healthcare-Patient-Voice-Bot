@@ -15,7 +15,7 @@ load_dotenv()
 
 # --- Safety constants ---
 TARGET_NUMBER = "+18054398008"  # ONLY number we ever call
-MAX_CALL_DURATION_SECONDS = 180
+MAX_CALL_DURATION_SECONDS = 300
 MAX_CALLS_PER_SESSION = 15
 
 # --- Twilio client ---

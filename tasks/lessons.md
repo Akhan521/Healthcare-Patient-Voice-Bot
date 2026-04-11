@@ -94,3 +94,23 @@ context_agg = llm.create_context_aggregator(context)
 **What happened:** Scenario prompts included specific doctor names ("Dr. Smith"), appointment times ("Thursday at 2pm"), and other details the receptionist never mentioned. The bot would reference these unprompted, making the conversation feel unnatural and scripted.
 **Fix:** Remove all hardcoded details that should come from the receptionist. Add rule: "Never invent details the receptionist has not mentioned. Wait for them to offer options."
 **Rule:** Voice bot personas should define personality, goals, and background info (DOB, insurance) — but never pre-script details that depend on the conversation flow (doctor names, times, availability).
+
+## 19. Deepgram STT needs explicit encoding/sample_rate for Twilio audio (2026-04-11)
+**What happened:** DeepgramSTTService was initialized with only `api_key`. Twilio sends mulaw-encoded audio at 8kHz, but without telling Deepgram the encoding, it may misinterpret the audio format, leading to poor or no transcription.
+**Fix:** Pass `model="nova-3-general", language="en-US", encoding="mulaw", sample_rate=8000` to `DeepgramSTTService`.
+**Rule:** Always configure STT to match the exact audio format of the transport. For Twilio: mulaw encoding at 8000Hz.
+
+## 20. Pipeline cleanup must use try/finally, not on_pipeline_finished alone (2026-04-11)
+**What happened:** Recordings and transcripts were never saved locally. The `on_pipeline_finished` event handler was responsible for calling `audiobuffer.stop_recording()` and `save_transcript()`, but when the WebSocket disconnects (Twilio hangs up), the pipeline may not end cleanly and the event never fires.
+**Fix:** Wrap `runner.run(task)` in try/finally. Save recording and transcript in the `finally` block so they're saved even on crash or abrupt disconnection.
+**Rule:** Never rely solely on pipeline events for critical cleanup. Always use try/finally around `runner.run()`.
+
+## 21. VAD stop_secs tuning: 0.6s is too aggressive for phone calls (2026-04-11)
+**What happened:** With `stop_secs=0.6`, the bot would start responding after only 0.6s of silence, frequently interrupting the receptionist mid-pause. Phone conversations have natural pauses, and the receptionist's AI also has processing gaps between sentences.
+**Fix:** Increased `stop_secs` to 1.0. This gives the receptionist time to pause between sentences without triggering a bot response.
+**Rule:** For telephony bots calling other AI agents, start with `stop_secs=1.0` and tune from there. Lower values cause interruptions, higher values feel sluggish.
+
+## 22. LLM temperature and max_tokens tuning for voice bots (2026-04-11)
+**What happened:** With `temperature=0.7` and `max_tokens=200`, the bot produced verbose, varied responses that sounded unnatural when spoken aloud. Phone conversation responses should be short and predictable.
+**Fix:** Reduced to `temperature=0.5, max_tokens=100`. Lower temperature = more consistent/natural phrasing. Lower max_tokens = faster response generation and shorter utterances.
+**Rule:** Voice bots should use lower temperature (0.4-0.6) and lower max_tokens (50-100) than text bots. Brevity is naturalness in phone calls.

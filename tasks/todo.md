@@ -9,24 +9,35 @@
   - [x] `src/bot.py` — Pipecat pipeline (3 CTO review rounds: 10 bugs fixed total)
   - [x] `src/server.py` — FastAPI + ngrok + Twilio (CTO review: 2 bugs fixed)
   - [x] `run.py` — CLI entry point (Windows asyncio + uvicorn + scenario menu)
+  - [x] Write `docs/code_walkthrough.md` — plain-language code explanation
 
 ## In Progress
-- [ ] Phase 3 wrap-up
-  - [x] Write `docs/code_walkthrough.md` — plain-language code explanation
-  - [ ] Commit + push Phase 3 (walkthrough, task updates)
+- [ ] Phase 4: First test call — debug and iterate
+  - [x] Call connects to +1-805-439-8008 via Twilio
+  - [x] Bot hears receptionist greeting, responds in character
+  - [x] Fix PipelineRunner SIGINT crash on Windows (handle_sigint=False)
+  - [x] Fix audio_in/out_enabled defaults (were False, now True)
+  - [x] Fix stage directions being spoken aloud (system prompt + TTS)
+  - [x] Fix hardcoded doctor names/times (reactive prompts)
+  - [x] Fix Deepgram STT encoding mismatch (removed mulaw, TwilioFrameSerializer handles conversion)
+  - [x] Add SilenceFilter processor to drop "(silence)" / "..." from TTS
+  - [x] Fix SilenceFilter StartFrame handling (must call super().process_frame)
+  - [x] Tune VAD stop_secs from 0.6 → 1.0 to reduce interruptions
+  - [x] Increase call time_limit from 180s → 300s (calls were cutting off at 3min)
+  - [x] Fix silence rule too aggressive (only apply to FINAL sentence, not whole turn)
+  - [x] Add live transcript logging to terminal
+  - [x] Add saved files summary on quit
+  - [ ] **BUG: Recordings and transcripts still not saving locally** — try/finally in bot.py should save, but files aren't appearing. Needs debugging next session.
+  - [ ] Tune conversation naturalness — bot still sounds somewhat robotic
+  - [ ] Verify MP3 recording captures both voices
+  - [ ] Verify transcript file saves with timestamps
 
 ## Remaining
-- [ ] Phase 4: First test call — verify end-to-end
-  - [ ] Call connects to +1-805-439-8008 via Twilio
-  - [ ] Bot hears receptionist greeting, responds in character
-  - [ ] MP3 recording saved with both voices audible
-  - [ ] Transcript captures both sides with timestamps
-  - [ ] Tune VAD `stop_secs` if bot interrupts too early
-- [ ] Phase 5: CLI testing — run `uv run python run.py`, test scenario menu
-- [ ] Phase 6: Execute 10+ calls across all scenarios
+- [ ] Phase 5: Execute 10+ calls across all scenarios
+  - [ ] Run all 12 scenarios
   - [ ] Commit recordings + transcripts in batches
   - [ ] Note bugs/quality issues for bug report
-- [ ] Phase 7: Documentation + bug report
+- [ ] Phase 6: Documentation + bug report
   - [ ] `docs/architecture.md` — 1-2 paragraph design overview
   - [ ] `docs/bug_report.md` — bugs found with recording references
   - [ ] Update `README.md` — setup + run instructions

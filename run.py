@@ -2,6 +2,7 @@ import asyncio
 import sys
 import threading
 import time
+from pathlib import Path
 
 # Windows asyncio fix — must be before any async code
 if sys.platform == "win32":
@@ -17,6 +18,8 @@ from src.server import app, make_call, start_ngrok, stop_ngrok
 load_dotenv()
 
 SERVER_PORT = 8765
+RECORDINGS_DIR = Path("recordings")
+TRANSCRIPTS_DIR = Path("transcripts")
 
 
 def print_menu():
@@ -27,6 +30,28 @@ def print_menu():
     for i, s in enumerate(scenarios, 1):
         print(f"  {i:2d}. [{s.id}] {s.name}")
     print(f"  {'q':>3}. Quit")
+    print("=" * 50)
+
+
+def print_saved_files():
+    print("\n" + "=" * 50)
+    print("  Saved Files")
+    print("=" * 50)
+    recordings = sorted(RECORDINGS_DIR.glob("*.mp3"))
+    transcripts = sorted(TRANSCRIPTS_DIR.glob("*.txt"))
+    if recordings:
+        print(f"\n  Recordings ({len(recordings)}):")
+        for r in recordings:
+            size_kb = r.stat().st_size / 1024
+            print(f"    {r.name}  ({size_kb:.0f} KB)")
+    else:
+        print("\n  No recordings saved.")
+    if transcripts:
+        print(f"\n  Transcripts ({len(transcripts)}):")
+        for t in transcripts:
+            print(f"    {t.name}")
+    else:
+        print("\n  No transcripts saved.")
     print("=" * 50)
 
 
@@ -90,6 +115,7 @@ def main():
         print("\nShutting down...")
     finally:
         stop_ngrok()
+        print_saved_files()
         logger.info("Cleanup complete.")
 
 

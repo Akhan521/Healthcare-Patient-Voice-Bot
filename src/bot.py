@@ -1,11 +1,19 @@
 import os
+import re
 import time
 
 from loguru import logger
 
+from pipecat.frames.frames import (
+    Frame,
+    LLMFullResponseEndFrame,
+    LLMFullResponseStartFrame,
+    TextFrame,
+)
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask, PipelineParams
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
     FastAPIWebsocketParams,
@@ -23,6 +31,62 @@ from pipecat.processors.transcript_processor import TranscriptProcessor
 from src.recorder import save_recording, save_transcript
 
 
+class SilenceFilter(FrameProcessor):
+    """Filters out LLM responses that are silence markers before they reach TTS.
+
+    The LLM can't output truly empty responses, so when instructed to be silent
+    it outputs markers like "(silence)" or "...". This filter accumulates the
+    full LLM response and drops it if it matches a silence pattern.
+    """
+
+    SILENCE_PATTERN = re.compile(
+        r"^[\s.…]*$|^\(silence\)$|^\[silence\]$|^\.{2,}$",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._accumulator = []
+        self._buffered_frames = []
+        self._in_response = False
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, LLMFullResponseStartFrame):
+            self._in_response = True
+            self._accumulator = []
+            self._buffered_frames = [frame]
+            return
+
+        if self._in_response:
+            self._buffered_frames.append(frame)
+
+            if isinstance(frame, TextFrame):
+                self._accumulator.append(frame.text)
+
+            if isinstance(frame, LLMFullResponseEndFrame):
+                full_text = "".join(self._accumulator).strip()
+                self._in_response = False
+
+                if self.SILENCE_PATTERN.match(full_text):
+                    logger.debug(f"SilenceFilter: dropped silence marker [{full_text}]")
+                    self._buffered_frames = []
+                    self._accumulator = []
+                    return
+
+                # Not silence — flush all buffered frames
+                for buffered in self._buffered_frames:
+                    await self.push_frame(buffered, direction)
+                self._buffered_frames = []
+                self._accumulator = []
+                return
+
+            return
+
+        await self.push_frame(frame, direction)
+
+
 async def run_bot(websocket, call_data, scenario):
     logger.info(f"Starting bot for scenario: {scenario.name} ({scenario.id})")
 
@@ -32,7 +96,9 @@ async def run_bot(websocket, call_data, scenario):
     turns = []
 
     # --- VAD ---
-    vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.6))
+    # Higher stop_secs = bot waits longer before responding, reducing interruptions.
+    # 1.0s gives the receptionist time to pause mid-sentence without the bot jumping in.
+    vad = SileroVADAnalyzer(params=VADParams(stop_secs=1.0))
 
     # --- Transport (VAD goes here, not PipelineParams) ---
     transport = FastAPIWebsocketTransport(
@@ -53,7 +119,11 @@ async def run_bot(websocket, call_data, scenario):
     )
 
     # --- Services ---
-    stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+    stt = DeepgramSTTService(
+        api_key=os.getenv("DEEPGRAM_API_KEY"),
+        model="nova-3-general",
+        language="en-US",
+    )
 
     tts = DeepgramTTSService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
@@ -64,10 +134,13 @@ async def run_bot(websocket, call_data, scenario):
         api_key=os.getenv("ANTHROPIC_API_KEY"),
         settings=AnthropicLLMService.Settings(
             model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            temperature=0.7,
+            max_tokens=100,
+            temperature=0.5,
         ),
     )
+
+    # --- Silence filter (drops "(silence)" etc. before TTS) ---
+    silence_filter = SilenceFilter()
 
     # --- Context (system prompt must be in context, not Settings) ---
     context = OpenAILLMContext(
@@ -111,6 +184,7 @@ async def run_bot(websocket, call_data, scenario):
             transcript_proc.user(),
             context_agg.user(),
             llm,
+            silence_filter,
             tts,
             transport.output(),
             transcript_proc.assistant(),
@@ -127,15 +201,20 @@ async def run_bot(websocket, call_data, scenario):
         ),
     )
 
-    @task.event_handler("on_pipeline_finished")
-    async def on_pipeline_finished(task, frame):
-        await audiobuffer.stop_recording()
+    # Start recording and run — save transcript/recording even if pipeline crashes
+    await audiobuffer.start_recording()
+    try:
+        runner = PipelineRunner(handle_sigint=False)
+        await runner.run(task)
+    finally:
+        logger.info("Pipeline ended, saving recording and transcript...")
+        try:
+            await audiobuffer.stop_recording()
+        except Exception:
+            logger.warning("Could not stop audio buffer cleanly")
         if turns:
             filepath = save_transcript(turns, scenario.id)
             logger.info(f"Transcript saved: {filepath}")
-
-    # Start recording and run
-    await audiobuffer.start_recording()
-    runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+        else:
+            logger.warning("No transcript turns captured")
     logger.info(f"Call completed for scenario: {scenario.id}")
