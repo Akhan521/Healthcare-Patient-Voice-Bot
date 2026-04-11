@@ -85,12 +85,15 @@ async def run_bot(websocket, call_data, scenario):
     async def on_transcript_update(processor, frame):
         elapsed = int(time.time() - call_start)
         minutes, seconds = divmod(elapsed, 60)
+        timestamp = f"{minutes:02d}:{seconds:02d}"
         for msg in frame.messages:
             turns.append({
                 "role": msg.role,
                 "text": msg.content,
-                "time": f"{minutes:02d}:{seconds:02d}",
+                "time": timestamp,
             })
+            role_label = "RECEPTIONIST" if msg.role == "user" else "BOT"
+            logger.info(f"[{timestamp}] {role_label}: {msg.content}")
 
     # --- Recording ---
     audiobuffer = AudioBufferProcessor(num_channels=1, sample_rate=8000)
