@@ -28,6 +28,8 @@
   - [x] Add live transcript logging to terminal
   - [x] Add saved files summary on quit
   - [ ] **BUG: Recordings and transcripts still not saving locally** — try/finally in bot.py should save, but files aren't appearing. Needs debugging next session.
+  - [ ] **Personas too rigid / not reactive enough** — bot assumes info (doctor names, appointment types) before receptionist confirms. System prompts need to be more open-ended and purely reactive. The patient should ONLY reference information the receptionist has explicitly stated. Consider making context more dynamic or simplifying persona goals to just "I want to schedule an appointment" without pre-loading specific details.
+  - [ ] **Response gap too large** — VAD stop_secs=1.0 causes noticeable delay between receptionist finishing and bot responding. Try tuning down to 0.7-0.8 for a more natural cadence.
   - [ ] Tune conversation naturalness — bot still sounds somewhat robotic
   - [ ] Verify MP3 recording captures both voices
   - [ ] Verify transcript file saves with timestamps
