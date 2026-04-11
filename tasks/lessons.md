@@ -74,3 +74,23 @@ context_agg = llm.create_context_aggregator(context)
 ## 11. ffmpeg on Windows: nested folder from zip extraction (2026-03-12)
 **What happened:** Extracting ffmpeg zip created a double-nested folder. Had to flatten it.
 **Rule:** After extracting, check the actual structure before assuming paths are correct.
+
+## 15. PipelineRunner signal handling crashes on Windows in non-main thread (2026-04-10)
+**What happened:** `PipelineRunner()` calls `signal.signal(SIGINT)` by default, which raises `ValueError: signal only works in main thread` when running inside uvicorn's worker thread on Windows.
+**Fix:** Pass `handle_sigint=False` to `PipelineRunner()` when it runs in a non-main thread.
+**Rule:** On Windows with threaded servers (uvicorn in a thread), always disable PipelineRunner's signal handling.
+
+## 16. FastAPIWebsocketParams audio_in/out_enabled default to False (2026-04-10)
+**What happened:** Pipeline started, Deepgram connected, but zero audio frames flowed. No STT, no LLM calls, complete silence for the entire call. Root cause: `audio_in_enabled` and `audio_out_enabled` both default to `False` in pipecat's `TransportParams`. The transport silently drops all audio unless explicitly enabled.
+**Fix:** Always set `audio_in_enabled=True, audio_out_enabled=True` in `FastAPIWebsocketParams`.
+**Rule:** Never assume transport defaults enable audio. Always explicitly set `audio_in_enabled=True` and `audio_out_enabled=True`.
+
+## 17. LLM system prompts for voice bots must forbid stage directions (2026-04-10)
+**What happened:** Bot read aloud text like "*pauses briefly*" and "*sighs*" because the LLM generated stage directions/emotions as text output, which TTS faithfully vocalized.
+**Fix:** System prompt must explicitly say: "You produce ONLY spoken dialogue. Never output stage directions, emotions, asterisks, parenthetical actions, or narration."
+**Rule:** Any LLM driving TTS needs a hard rule against non-speech text. LLMs default to including stage directions in roleplay — you must explicitly forbid it.
+
+## 18. Voice bot personas must be reactive, not scripted with hardcoded details (2026-04-10)
+**What happened:** Scenario prompts included specific doctor names ("Dr. Smith"), appointment times ("Thursday at 2pm"), and other details the receptionist never mentioned. The bot would reference these unprompted, making the conversation feel unnatural and scripted.
+**Fix:** Remove all hardcoded details that should come from the receptionist. Add rule: "Never invent details the receptionist has not mentioned. Wait for them to offer options."
+**Rule:** Voice bot personas should define personality, goals, and background info (DOB, insurance) — but never pre-script details that depend on the conversation flow (doctor names, times, availability).

@@ -44,6 +44,8 @@ async def run_bot(websocket, call_data, scenario):
                 account_sid=os.getenv("TWILIO_ACCOUNT_SID"),
                 auth_token=os.getenv("TWILIO_AUTH_TOKEN"),
             ),
+            audio_in_enabled=True,
+            audio_out_enabled=True,
             audio_in_sample_rate=8000,
             audio_out_sample_rate=8000,
             vad_analyzer=vad,
@@ -131,6 +133,6 @@ async def run_bot(websocket, call_data, scenario):
 
     # Start recording and run
     await audiobuffer.start_recording()
-    runner = PipelineRunner()
+    runner = PipelineRunner(handle_sigint=False)
     await runner.run(task)
     logger.info(f"Call completed for scenario: {scenario.id}")
