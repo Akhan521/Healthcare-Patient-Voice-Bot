@@ -96,9 +96,8 @@ async def run_bot(websocket, call_data, scenario):
     turns = []
 
     # --- VAD ---
-    # Higher stop_secs = bot waits longer before responding, reducing interruptions.
-    # 1.0s gives the receptionist time to pause mid-sentence without the bot jumping in.
-    vad = SileroVADAnalyzer(params=VADParams(stop_secs=1.0))
+    # 0.8s balances natural cadence against mid-sentence interruptions.
+    vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.8))
 
     # --- Transport (VAD goes here, not PipelineParams) ---
     transport = FastAPIWebsocketTransport(
