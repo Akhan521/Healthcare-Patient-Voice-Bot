@@ -30,7 +30,11 @@
   - [ ] **BUG: Recordings and transcripts still not saving locally** — try/finally in bot.py should save, but files aren't appearing. Needs debugging next session.
   - [x] **Personas too rigid / not reactive enough** — rewrote SYSTEM_PREAMBLE rule #3 to enforce purely reactive behavior; simplified each persona to state only high-level goal, moved all specifics (DOB, insurance, med names) behind "ONLY if asked"
   - [x] **Response gap too large** — VAD stop_secs 1.0 → 0.8 for more natural cadence
-  - [ ] Tune conversation naturalness — bot still sounds somewhat robotic
+  - [x] **Reframe personas for orthopedics target** — 7 of 12 scenarios rewritten as ortho-fit (knee pain, post-op follow-ups, meloxicam refill, rolled ankle, etc.); 4 kept domain-neutral; 1 (pet pivot) kept as deliberate off-domain edge case
+  - [x] **Personas bulldoze past receptionist's framing** — added preamble rule 8 (listen to greeting, answer specific questions first, work within announced scope, follow test-call instructions) and rule 9 (remember and respect what receptionist said earlier). Softened all personas from "Open by..." → "When invited to speak, say..." Scenarios 10 and 11 explicitly told to drop items the receptionist marks out of scope.
+  - [ ] **BUG: Recordings and transcripts still not saving locally** — TOP PRIORITY next session. Add debug logging inside the try/finally and the on_audio_data handler to trace whether stop_recording() is actually triggering the callback. If the event doesn't fire, try calling save_recording directly in the finally block.
+  - [ ] **Run first test call (scenario 01 — knee pain eval)** to validate the preamble/persona rewrite before running the rest
+  - [ ] **Tune voice naturalness** — bot still sounds somewhat robotic. User plans to experiment with TTS voice alternatives, VAD timing, LLM temperature, and possibly prompt phrasing tweaks.
   - [ ] Verify MP3 recording captures both voices
   - [ ] Verify transcript file saves with timestamps
 
