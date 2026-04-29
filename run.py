@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from src.scenarios import list_scenarios
-from src.server import app, make_call, start_ngrok, stop_ngrok
+from src.server import app, make_call, start_ngrok, stop_ngrok, wait_for_call_end
 
 load_dotenv()
 
@@ -101,9 +101,16 @@ def main():
 
                     call_sid = make_call(scenario.id)
                     print(f"Call started (SID: {call_sid})")
-                    print("Waiting for call to complete... (check logs for progress)")
-                    print("Press Enter when done to return to menu.")
-                    input()
+                    print("Call in progress — will return to menu automatically when call ends.")
+                    print("(Ctrl+C to abort)")
+                    try:
+                        signalled = wait_for_call_end()
+                        if signalled:
+                            print("Call ended.")
+                        else:
+                            print("Wait timed out — returning to menu.")
+                    except KeyboardInterrupt:
+                        print("\nAborted wait — returning to menu.")
                 else:
                     print("Invalid number.")
             except ValueError:

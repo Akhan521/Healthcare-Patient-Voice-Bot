@@ -1,4 +1,5 @@
 import os
+import threading
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
@@ -27,6 +28,10 @@ twilio_client = TwilioClient(
 # --- State ---
 ngrok_url = None
 call_count = 0
+# Set by the WebSocket handler when run_bot returns (i.e. all save logic + pipeline
+# teardown is complete). The CLI waits on this so the menu doesn't reappear until
+# every bot log line has flushed.
+call_finished_event = threading.Event()
 
 app = FastAPI()
 
@@ -48,12 +53,19 @@ def stop_ngrok():
     ngrok.kill()
 
 
+def wait_for_call_end(timeout: float = 600.0) -> bool:
+    """Block until run_bot signals completion. Returns True if signalled, False on timeout."""
+    return call_finished_event.wait(timeout=timeout)
+
+
 def make_call(scenario_id: str) -> str:
     """Initiate a Twilio outbound call. Returns the call SID."""
     global call_count
 
     if call_count >= MAX_CALLS_PER_SESSION:
         raise RuntimeError(f"Session limit reached ({MAX_CALLS_PER_SESSION} calls)")
+
+    call_finished_event.clear()
 
     if not ngrok_url:
         raise RuntimeError("ngrok tunnel not started — call start_ngrok() first")
@@ -100,3 +112,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception:
         logger.exception("Error in WebSocket handler")
+    finally:
+        # Signal the CLI that the bot is fully done — all save logic ran, all
+        # pipeline teardown finished. The menu can now safely reappear.
+        call_finished_event.set()
