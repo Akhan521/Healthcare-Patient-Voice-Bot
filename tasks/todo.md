@@ -32,11 +32,12 @@
   - [x] **Response gap too large** — VAD stop_secs 1.0 → 0.8 for more natural cadence
   - [x] **Reframe personas for orthopedics target** — 7 of 12 scenarios rewritten as ortho-fit (knee pain, post-op follow-ups, meloxicam refill, rolled ankle, etc.); 4 kept domain-neutral; 1 (pet pivot) kept as deliberate off-domain edge case
   - [x] **Personas bulldoze past receptionist's framing** — added preamble rule 8 (listen to greeting, answer specific questions first, work within announced scope, follow test-call instructions) and rule 9 (remember and respect what receptionist said earlier). Softened all personas from "Open by..." → "When invited to speak, say..." Scenarios 10 and 11 explicitly told to drop items the receptionist marks out of scope.
-  - [ ] **BUG: Recordings and transcripts still not saving locally** — TOP PRIORITY next session. Add debug logging inside the try/finally and the on_audio_data handler to trace whether stop_recording() is actually triggering the callback. If the event doesn't fire, try calling save_recording directly in the finally block.
-  - [ ] **Run first test call (scenario 01 — knee pain eval)** to validate the preamble/persona rewrite before running the rest
-  - [ ] **Tune voice naturalness** — bot still sounds somewhat robotic. User plans to experiment with TTS voice alternatives, VAD timing, LLM temperature, and possibly prompt phrasing tweaks.
-  - [ ] Verify MP3 recording captures both voices
-  - [ ] Verify transcript file saves with timestamps
+  - [x] **BUG: Recordings and transcripts not saving locally** — fixed. Two structural problems: (1) start_recording() raced StartFrame propagation, moved into on_client_connected; (2) runner.run() hangs on WebSocket disconnect, added on_client_disconnected handler to save inline + cancel task.
+  - [x] **Run first test call (scenario 01 — knee pain eval)** — done, validated rules 8 and 9 work correctly. Bot waited for greeting, stayed in scope, sounded much smoother at stop_secs=0.8.
+  - [x] **Auto-return to menu (no manual ENTER)** — fixed. Replaced unreliable Twilio status polling with a threading.Event signalled from the WebSocket handler's finally block.
+  - [x] Verify MP3 recording captures both voices (1.2MB MP3 written, 2.5MB raw audio)
+  - [x] Verify transcript file saves with timestamps (2.6KB transcript with [mm:ss] timestamps for 41+ turns)
+  - [ ] **Tune voice naturalness** — user plans to experiment with TTS voice alternatives, VAD timing, LLM temperature, and possibly prompt phrasing tweaks. Some response gap noted at 0.8 — try 0.7 or further iteration.
 
 ## Remaining
 - [ ] Phase 5: Execute 10+ calls across all scenarios

@@ -114,3 +114,18 @@ context_agg = llm.create_context_aggregator(context)
 **What happened:** With `temperature=0.7` and `max_tokens=200`, the bot produced verbose, varied responses that sounded unnatural when spoken aloud. Phone conversation responses should be short and predictable.
 **Fix:** Reduced to `temperature=0.5, max_tokens=100`. Lower temperature = more consistent/natural phrasing. Lower max_tokens = faster response generation and shorter utterances.
 **Rule:** Voice bots should use lower temperature (0.4-0.6) and lower max_tokens (50-100) than text bots. Brevity is naturalness in phone calls.
+
+## 23. PipelineRunner.run() hangs on WebSocket disconnect — use on_client_disconnected (2026-04-28)
+**What happened:** Try/finally around `runner.run(task)` was supposed to guarantee transcript+recording save (lesson 20), but the finally never executed. Trace showed last bot message → DeprecationWarning → silence. Twilio hung up the call but Pipecat's pipeline kept waiting for an EndFrame that never propagated, so `runner.run()` never returned.
+**Fix:** Add a `transport.event_handler("on_client_disconnected")` callback that does the save work inline AND calls `await task.cancel()` to force the runner to return. Keep the finally block as belt-and-suspenders, gated by a `saved` flag to prevent double-writes.
+**Rule:** For WebSocket-based telephony transports in Pipecat, do critical save work in `on_client_disconnected`, not just in finally. The disconnect event is the only reliable signal that the call is truly over. **This supersedes lesson 20**: try/finally alone is not sufficient.
+
+## 24. AudioBufferProcessor.start_recording() must run AFTER the pipeline boots (2026-04-28)
+**What happened:** Calling `await audiobuffer.start_recording()` immediately before `runner.run(task)` raced the pipeline's StartFrame propagation. When `start_recording()` fired before the processor had received its StartFrame, it silently no-op'd and never accumulated frames. End-of-call `stop_recording()` had nothing to flush, so `on_audio_data` never fired and no MP3 was written.
+**Fix:** Move `start_recording()` into a `transport.event_handler("on_client_connected")` callback. This guarantees it runs after the pipeline has fully booted and the AudioBufferProcessor is in a state where it can accept frames.
+**Rule:** Any per-call setup that depends on processor state should run in `on_client_connected`, not before `runner.run()`. Pre-pipeline setup runs in a void where processors haven't received their StartFrame yet.
+
+## 25. Twilio call-status polling is unreliable for "call ended" detection (2026-04-28)
+**What happened:** CLI polled Twilio's call status to detect call end and return to the menu. Twilio reports `completed` the moment its audio stream ends, but the WebSocket close cascading through FastAPI → `on_client_disconnected` → save logic → pipeline teardown takes another 500ms–2s. The menu reappeared mid-teardown, with a flood of disconnect logs interleaved over the input prompt — eating the user's keystroke as "Invalid input."
+**Fix:** Use a `threading.Event` set by the WebSocket handler's `finally` block (after `run_bot` returns). The CLI waits on this event instead of polling Twilio. The event only fires after every save log has flushed and the pipeline is fully torn down.
+**Rule:** For "is the work truly done" signals, prefer in-process completion signals over external API polling. External services report status from their own perspective; local cleanup may take significantly longer.
