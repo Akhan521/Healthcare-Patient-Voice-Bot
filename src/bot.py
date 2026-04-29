@@ -172,8 +172,23 @@ async def run_bot(websocket, call_data, scenario):
 
     @audiobuffer.event_handler("on_audio_data")
     async def on_audio_data(buffer, audio, sample_rate, num_channels):
-        filepath = save_recording(audio, scenario.id, sample_rate, num_channels)
-        logger.info(f"Recording saved: {filepath}")
+        logger.info(
+            f"on_audio_data fired: bytes={len(audio) if audio else 0}, "
+            f"sample_rate={sample_rate}, channels={num_channels}"
+        )
+        try:
+            filepath = save_recording(audio, scenario.id, sample_rate, num_channels)
+            logger.info(f"Recording saved: {filepath.resolve()}")
+        except Exception:
+            logger.exception("save_recording failed inside on_audio_data")
+
+    # Pipecat needs start_recording() to run AFTER the pipeline boots (after the
+    # processor has received its StartFrame). Calling it before runner.run() can
+    # silently no-op. Hooking it to on_client_connected guarantees correct timing.
+    @transport.event_handler("on_client_connected")
+    async def on_client_connected(transport, client):
+        logger.info("Client connected — starting audio buffer recording")
+        await audiobuffer.start_recording()
 
     # --- Pipeline ---
     pipeline = Pipeline(
@@ -200,20 +215,47 @@ async def run_bot(websocket, call_data, scenario):
         ),
     )
 
-    # Start recording and run — save transcript/recording even if pipeline crashes
-    await audiobuffer.start_recording()
+    saved = False
+
+    async def do_save(reason):
+        nonlocal saved
+        if saved:
+            logger.info(f"do_save({reason}): already saved, skipping")
+            return
+        saved = True
+        logger.info(f"===== do_save({reason}) running =====")
+        logger.info(f"turns captured so far: {len(turns)}")
+        try:
+            logger.info("Calling audiobuffer.stop_recording()...")
+            await audiobuffer.stop_recording()
+            logger.info("audiobuffer.stop_recording() returned")
+        except Exception:
+            logger.exception("audiobuffer.stop_recording() raised")
+        if turns:
+            try:
+                filepath = save_transcript(turns, scenario.id)
+                logger.info(f"Transcript saved: {filepath.resolve()}")
+            except Exception:
+                logger.exception("save_transcript failed")
+        else:
+            logger.warning("No transcript turns captured — skipping transcript write")
+
+    # When Twilio drops the call, runner.run() can hang waiting for an EndFrame
+    # that never arrives. on_client_disconnected fires reliably on WebSocket
+    # close, so we save inline here and explicitly cancel the task so
+    # runner.run() returns.
+    @transport.event_handler("on_client_disconnected")
+    async def on_client_disconnected(transport, client):
+        logger.info("Client disconnected — saving and cancelling task")
+        await do_save("on_client_disconnected")
+        try:
+            await task.cancel()
+        except Exception:
+            logger.exception("task.cancel() raised")
+
     try:
         runner = PipelineRunner(handle_sigint=False)
         await runner.run(task)
     finally:
-        logger.info("Pipeline ended, saving recording and transcript...")
-        try:
-            await audiobuffer.stop_recording()
-        except Exception:
-            logger.warning("Could not stop audio buffer cleanly")
-        if turns:
-            filepath = save_transcript(turns, scenario.id)
-            logger.info(f"Transcript saved: {filepath}")
-        else:
-            logger.warning("No transcript turns captured")
+        await do_save("finally")
     logger.info(f"Call completed for scenario: {scenario.id}")
