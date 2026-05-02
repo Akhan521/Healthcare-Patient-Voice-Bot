@@ -37,7 +37,9 @@
   - [x] **Auto-return to menu (no manual ENTER)** — fixed. Replaced unreliable Twilio status polling with a threading.Event signalled from the WebSocket handler's finally block.
   - [x] Verify MP3 recording captures both voices (1.2MB MP3 written, 2.5MB raw audio)
   - [x] Verify transcript file saves with timestamps (2.6KB transcript with [mm:ss] timestamps for 41+ turns)
-  - [ ] **Tune voice naturalness** — user plans to experiment with TTS voice alternatives, VAD timing, LLM temperature, and possibly prompt phrasing tweaks. Some response gap noted at 0.8 — try 0.7 or further iteration.
+  - [x] **Tune voice naturalness** — VAD/LLM tuning deferred (low yield per analysis). Applied two higher-leverage changes:
+    - **Voice swaps (commit 1605a3c):** Recast 8 of 12 scenarios against live Deepgram Aura 2 catalog. Eliminated 3 duplicate voices (helena, hermes, apollo each used twice) and corrected 4 age/tone mismatches (Robert 62 → mars baritone, Dorothy 72 → pandora calm/breathy, Tony impatient → saturn, etc.). All 12 scenarios now have unique voices with persona-fit descriptors.
+    - **Prompt phrasing (commits 4ef95d8, 2eb2eee):** Expanded SYSTEM_PREAMBLE rule #2 with sentence-fragment + self-correction guidance. Added one-sentence "Tics:" fingerprint to each of the 12 personas (signature filler phrases + tonal cue) so each persona has its own speech fingerprint. Conservative phrasing for Dorothy and Priya to avoid TTS pronouncing literal "haha" or over-fragmenting speech.
 
 ## Remaining
 - [ ] Phase 5: Execute 10+ calls across all scenarios
