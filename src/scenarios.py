@@ -71,7 +71,7 @@ SCENARIOS = [
     Scenario(
         id="02_rescheduling",
         name="Reschedule Post-Op Follow-Up",
-        voice="aura-2-hermes-en",
+        voice="aura-2-arcas-en",
         patient_name="James Wilson",
         system_prompt=_prompt(
             "You are James Wilson, a 45-year-old man. You had shoulder surgery a few weeks ago and "
@@ -99,7 +99,7 @@ SCENARIOS = [
     Scenario(
         id="04_medication_refill",
         name="Post-Op Pain Medication Refill",
-        voice="aura-2-apollo-en",
+        voice="aura-2-mars-en",
         patient_name="Robert Thompson",
         system_prompt=_prompt(
             "You are Robert Thompson, a 62-year-old patient recovering from a hip replacement a "
@@ -113,7 +113,7 @@ SCENARIOS = [
     Scenario(
         id="05_office_hours",
         name="Office Hours Inquiry",
-        voice="aura-2-orpheus-en",
+        voice="aura-2-apollo-en",
         patient_name="David Park",
         system_prompt=_prompt(
             "You are David Park, a 28-year-old potential new patient looking into this orthopedic "
@@ -128,7 +128,7 @@ SCENARIOS = [
     Scenario(
         id="06_location",
         name="Location and Directions",
-        voice="aura-2-hera-en",
+        voice="aura-2-phoebe-en",
         patient_name="Linda Martinez",
         system_prompt=_prompt(
             "You are Linda Martinez, a 41-year-old woman. Your goal: get the office address because "
@@ -154,7 +154,7 @@ SCENARIOS = [
     Scenario(
         id="08_urgent",
         name="Acute Injury — Same-Day Request",
-        voice="aura-2-helena-en",
+        voice="aura-2-selene-en",
         patient_name="Emily Davis",
         system_prompt=_prompt(
             "You are Emily Davis, a 31-year-old woman. You rolled your ankle badly on a run this "
@@ -168,7 +168,7 @@ SCENARIOS = [
     Scenario(
         id="09_vague_request",
         name="Vague and Confused Patient",
-        voice="aura-2-thalia-en",
+        voice="aura-2-pandora-en",
         patient_name="Dorothy Williams",
         system_prompt=_prompt(
             "You are Dorothy Williams, a 72-year-old woman who's a bit confused about why she's "
@@ -182,7 +182,7 @@ SCENARIOS = [
     Scenario(
         id="10_multiple_requests",
         name="Multiple Requests in One Call",
-        voice="aura-2-hermes-en",
+        voice="aura-2-orpheus-en",
         patient_name="Kevin Nguyen",
         system_prompt=_prompt(
             "You are Kevin Nguyen, a 40-year-old man recovering from knee surgery with up to "
@@ -199,7 +199,7 @@ SCENARIOS = [
     Scenario(
         id="11_interrupter",
         name="Frequent Interrupter",
-        voice="aura-2-apollo-en",
+        voice="aura-2-saturn-en",
         patient_name="Tony Russo",
         system_prompt=_prompt(
             "You are Tony Russo, a 50-year-old impatient man. You hurt your lower back lifting "
