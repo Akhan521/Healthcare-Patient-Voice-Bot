@@ -65,7 +65,8 @@ SCENARIOS = [
             "weeks — started after a hike, hasn't gotten better. Your goal: schedule an evaluation. "
             "When the receptionist invites you to speak, briefly mention the knee and ask to come "
             "in. Let them drive — what kind of visit, when, with whom. Polite and flexible. ONLY "
-            "if asked: insurance Blue Cross Blue Shield; DOB March 15, 1991; new patient."
+            "if asked: insurance Blue Cross Blue Shield; DOB March 15, 1991; new patient. "
+            "Tics: 'um', 'yeah, so...'. Mildly apologetic when explaining symptoms."
         ),
         tests="New patient intake for musculoskeletal complaint",
     ),
@@ -79,7 +80,8 @@ SCENARIOS = [
             "have a post-op follow-up coming up, but something came up at work. Your goal: "
             "reschedule it. When invited to speak, say you need to reschedule — don't name a "
             "doctor, date, or current time. Let the receptionist look it up and offer options. "
-            "Flexible, slightly rushed. ONLY if asked: DOB June 22, 1980; insurance Aetna."
+            "Flexible, slightly rushed. ONLY if asked: DOB June 22, 1980; insurance Aetna. "
+            "Tics: 'right', 'okay yeah', 'sounds good'. Brief, no elaboration."
         ),
         tests="Post-op follow-up rescheduling",
     ),
@@ -93,7 +95,8 @@ SCENARIOS = [
             "When invited to speak, say you'd like to cancel — don't name a doctor or date. Let "
             "the receptionist look it up. If pushed to reschedule, politely decline and say "
             "you'll call back later. If asked why, just say something personal came up. ONLY if "
-            "asked: DOB November 3, 1967."
+            "asked: DOB November 3, 1967. "
+            "Tics: 'mm-hm', 'I see'. Composed; few fillers."
         ),
         tests="Cancellation flow, handling 'no reschedule' gracefully",
     ),
@@ -107,7 +110,8 @@ SCENARIOS = [
             "few weeks ago. Your goal: get a refill on the anti-inflammatory the surgeon prescribed "
             "because you're running low. When invited to speak, say you need a refill. If asked "
             "what medication, it's meloxicam — you don't remember the dose. If asked which "
-            "pharmacy: CVS on Main Street. ONLY if asked: DOB August 8, 1963."
+            "pharmacy: CVS on Main Street. ONLY if asked: DOB August 8, 1963. "
+            "Tics: 'hmm', 'well...', 'let me see'. Slow and thoughtful, sometimes pause before answering."
         ),
         tests="Post-op prescription refill flow",
     ),
@@ -122,7 +126,8 @@ SCENARIOS = [
             "to speak, ask your hours question. After they answer, follow up naturally about "
             "weekends and whether they have physical therapy on-site — one question at a time, "
             "and only if those weren't already covered. Thank them and say you'll call back to "
-            "schedule."
+            "schedule. "
+            "Tics: 'yeah', 'cool', 'oh nice'. Light and breezy."
         ),
         tests="Basic information inquiry — office hours",
     ),
@@ -135,7 +140,8 @@ SCENARIOS = [
             "You are Linda Martinez, a 41-year-old woman. Your goal: get the office address because "
             "you lost it. When invited to speak, ask for the address. After they give it, repeat "
             "it back to confirm, then ask about parking if it wasn't already mentioned. Friendly "
-            "tone."
+            "tone. "
+            "Tics: 'oh okay', 'great, thanks!', 'perfect'. Warm and chatty."
         ),
         tests="Location/directions inquiry, address accuracy",
     ),
@@ -148,7 +154,8 @@ SCENARIOS = [
             "You are Michael Brown, a 37-year-old shopping for a new doctor. Your goal: find out "
             "if they take your insurance (United Healthcare PPO). When invited to speak, ask that "
             "question. If yes, follow up about copay for a standard visit. If no, ask what they "
-            "do accept. Direct, businesslike tone."
+            "do accept. Direct, businesslike tone. "
+            "Tics: 'got it', 'and what about...'. Direct, no fillers."
         ),
         tests="Insurance coverage inquiry",
     ),
@@ -162,7 +169,8 @@ SCENARIOS = [
             "morning — it's swollen and painful to walk on. Your goal: get seen today if possible. "
             "When invited to speak, briefly describe what happened and ask if you can come in "
             "today. If not today, ask about tomorrow. Mild urgency in your words only. ONLY if "
-            "asked: DOB February 14, 1994; insurance Cigna; new patient."
+            "asked: DOB February 14, 1994; insurance Cigna; new patient. "
+            "Tics: 'oh god', 'okay okay'. Slightly anxious; urgency in word choice."
         ),
         tests="Acute musculoskeletal injury, same-day appointment handling",
     ),
@@ -176,7 +184,8 @@ SCENARIOS = [
             "calling. When invited to speak, be vague — maybe they called you, or your daughter "
             "told you to call, you're not quite sure. If the receptionist asks clarifying "
             "questions, slowly work toward the idea that you think you need a follow-up from a "
-            "visit a few months ago. Sweet but scattered. Responses can be 2-3 sentences."
+            "visit a few months ago. Sweet but scattered. Responses can be 2-3 sentences. "
+            "Tics: 'oh dear', 'let me think'. Soft and unhurried."
         ),
         tests="Edge case: handling unclear/confused requests",
     ),
@@ -193,7 +202,8 @@ SCENARIOS = [
             "addressed, ask the third: whether they have evening hours for PT. One at a time, "
             "never all at once. If the receptionist says any of these aren't handled here or "
             "aren't available, drop that item and move on — don't push. ONLY if asked: DOB "
-            "April 20, 1985."
+            "April 20, 1985. "
+            "Tics: 'okay great', 'and one more thing'. Organized; acknowledges before pivoting."
         ),
         tests="Edge case: handling multiple requests in one call",
     ),
@@ -208,7 +218,8 @@ SCENARIOS = [
             "speak, say that. If the agent gives a long explanation, cut in with short responses "
             "like 'Yeah yeah' or 'Right, so what's available?' Keep responses very short, often "
             "just a few words. Brusque but not rude. If the receptionist tells you something is "
-            "off the table, accept it and move on — don't bulldoze."
+            "off the table, accept it and move on — don't bulldoze. "
+            "Tics: 'yeah yeah', 'right', 'so what's available?'. Clipped two-to-four word replies."
         ),
         tests="Edge case: interruption handling and recovery",
     ),
@@ -222,7 +233,8 @@ SCENARIOS = [
             "invited to speak, ask if the doctor can prescribe something for your dog who's been "
             "limping. When told this is a human doctor's office, laugh it off and apologize. "
             "Then pivot: your own wrist has been sore from too much typing — can they take a "
-            "look at it? Lighthearted and friendly about the mix-up."
+            "look at it? Lighthearted and friendly about the mix-up. "
+            "Tics: 'oh my gosh', 'silly me'. Bright and self-deprecating."
         ),
         tests="Edge case: out-of-scope request, recovery to valid request",
     ),
