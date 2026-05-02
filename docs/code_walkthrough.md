@@ -131,17 +131,18 @@ Each scenario's `system_prompt` is what gets fed to Claude as instructions. It's
 
 **The preamble rules** are the most load-bearing part of conversation quality. The key ones:
 - **Spoken-only output** (no asterisks, stage directions, parentheticals) — TTS will read whatever the LLM emits, so this has to be a hard rule.
+- **Sound human (rule 2)** — contractions, casual filler ("um", "oh", "hmm"), varied sentence length, and explicit permission to use sentence fragments and self-correction ("I was — well, actually..."). Targets the most audible robotic tell: every utterance being a clean grammatical sentence.
 - **Purely reactive (rule 3)** — the patient never invents details the receptionist hasn't said first. No doctor names, times, or appointment types pulled from thin air. They open with only a high-level goal and let the receptionist drive the specifics.
 - **Hold-phrase silence (rule 4)** — if the receptionist's final sentence is just "one moment" / "let me check," output `...` so the bot doesn't speak over the hold. The SilenceFilter then drops that marker before it reaches TTS.
 - **Graceful rejection (rule 7)** — if the receptionist says they can't help, accept it; don't insist or re-pitch. Real callers don't fight receptionists.
 - **Listen to the greeting (rule 8)** — wait for the receptionist to finish, answer specific questions before launching into the goal, work within whatever scope they announce, follow any test-call instructions they give.
 - **Memory (rule 9)** — everything the receptionist said earlier in the call is ground truth. Don't re-ask about things they already covered.
 
-Each scenario's persona block is intentionally short — a sentence on identity, a sentence on goal, and any fixed details (DOB, insurance) gated behind "ONLY if asked." The opening phrasing is "When invited to speak, say…" rather than "Open by…" so the bot doesn't talk over the receptionist's greeting.
+Each scenario's persona block is intentionally short — a sentence on identity, a sentence on goal, and any fixed details (DOB, insurance) gated behind "ONLY if asked." The opening phrasing is "When invited to speak, say…" rather than "Open by…" so the bot doesn't talk over the receptionist's greeting. Each block also ends with a one-sentence "Tics:" line — 2-3 signature filler phrases plus a tonal cue (e.g., Tony: *"yeah yeah", "right", "so what's available?". Clipped two-to-four word replies.*). These persona-specific fingerprints stop every "human" voice from sounding like the same human.
 
 **Ortho-fit vs. off-domain mix.** The target test number is an orthopedics practice (Pivot Point Orthopaedics). 7 of 12 scenarios are written to fit that domain (knee pain eval, post-op follow-ups, anti-inflammatory refill, rolled-ankle same-day, etc.) so the bulk of calls stress-test real workflows. 4 are domain-neutral (cancellation, location, insurance, confused elderly). 1 is deliberately off-domain (a pet prescription request that pivots to a wrist complaint) to test how Athena handles graceful scope rejection.
 
-**Why different voices?** Each scenario uses a different Deepgram Aura 2 voice so the calls sound like different people — a mix of male and female voices that match the patient personas.
+**Why different voices?** Each scenario uses a different Deepgram Aura 2 voice so the calls sound like different people. The 12 voices are cast against the live Aura 2 catalog (gender + perceived-age + tone descriptors) for persona fit — e.g., Robert (62-year-old post-op patient) gets `mars` (patient, baritone), Tony (impatient 50-year-old) gets `saturn` (no-warmth baritone), Dorothy (confused 72-year-old) gets `pandora` (calm, breathy — closest the catalog has to elderly).
 
 ---
 
